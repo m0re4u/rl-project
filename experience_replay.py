@@ -1,4 +1,6 @@
 import gym
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -11,40 +13,11 @@ import torch.nn.functional as F
 from torch import optim
 from tqdm import tqdm as _tqdm
 
+from replay_memory import ReplayMemory
+from QNetwork import QNetwork
+
 def tqdm(*args, **kwargs):
     return _tqdm(*args, **kwargs, mininterval=1)  # Safety, do not overflow buffer
-
-
-class QNetwork(nn.Module):
-
-    def __init__(self, num_hidden=128):
-        nn.Module.__init__(self)
-        self.l1 = nn.Linear(4, num_hidden)
-        self.l2 = nn.Linear(num_hidden, 2)
-
-    def forward(self, x):
-        print(x.shape)
-        return self.l2(torch.relu(self.l1(x)))
-
-
-class ReplayMemory:
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-
-    def push(self, transition):
-        self.memory.append(transition)
-        if len(self.memory) > self.capacity:
-            # Remove first element if we exceed the capacity
-            self.memory.pop(0)
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, k=batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
 
 def get_epsilon(it):
     N = 1000
@@ -147,7 +120,7 @@ if __name__ == "__main__":
     batch_size = 64
     discount_factor = 0.8
     learn_rate = 1e-3
-    memory = ReplayMemory(10000)
+    memory = ReplayMemory(100000)
     num_hidden = 128
     seed = 42  # This is not randomly chosen
 
