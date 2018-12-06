@@ -113,7 +113,9 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
 
 
 if __name__ == "__main__":
-    env = gym.envs.make("CartPole-v0")
+
+    env = gym.envs.make("Acrobot-v1")
+    print(f"Action space: {env.action_space} - State space: {env.observation_space}")
 
     # Let's run it!
     num_episodes = 100
@@ -128,7 +130,10 @@ if __name__ == "__main__":
     random.seed(seed)
     torch.manual_seed(seed)
     env.seed(seed)
-
-    model = QNetwork(num_hidden)
+    print(env.observation_space.shape)
+    print(env.action_space.shape)
+    model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
 
     episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+    plt.plot(episode_durations)
+    plt.savefig("test.png")
