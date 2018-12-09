@@ -28,16 +28,28 @@ def get_epsilon(it):
         return ep
 
 
-def select_action(model, state, epsilon):
+def select_action(model, state, actions, epsilon):
     p = random.random()
     if p > epsilon:
         # Select greedy action
         with torch.no_grad():
-            _, ind = model(torch.Tensor(state)).max(0)
-            return ind.item()
+            # _, ind = model(torch.Tensor(state)).max(0)
+            out = model(torch.Tensor(state))
+            val, ind = out.max(0)
+            if type(actions) == gym.spaces.Discrete:
+                return ind.item()
+            elif type(actions) == gym.spaces.Box:
+                return val
+
+
     else:
         # Select random action
-        return random.choice([0,1])
+        if type(actions) == gym.spaces.Discrete:
+            return random.choice(list(range(actions.n)))
+        elif type(actions) == gym.spaces.Box:
+            return np.random.uniform(low=actions.low, high=actions.high, size=actions.low.shape)
+        else:
+            raise NotImplementedError()
 
 
 def compute_q_val(model, state, action):
@@ -64,7 +76,7 @@ def train(model, memory, optimizer, batch_size, discount_factor):
 
     # convert to PyTorch and define types
     state = torch.tensor(state, dtype=torch.float)
-    action = torch.tensor(action, dtype=torch.int64)  # Need 64 bit to use them as index
+    action = torch.tensor(action)  # Need 64 bit to use them as index
     next_state = torch.tensor(next_state, dtype=torch.float)
     reward = torch.tensor(reward, dtype=torch.float)
     done = torch.tensor(done, dtype=torch.uint8)  # Boolean
@@ -97,7 +109,7 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
         episode_length = 0
 
         while not done:
-            a = select_action(model, s, get_epsilon(global_steps))
+            a = select_action(model, s, env.action_space, get_epsilon(global_steps))
             s_next, r, done, _ = env.step(a)
             memory.push((s, a, r, s_next, done))
             s = s_next
@@ -122,7 +134,7 @@ if __name__ == "__main__":
     batch_size = 64
     discount_factor = 0.8
     learn_rate = 1e-3
-    memory = ReplayMemory(100000)
+    memory = ReplayMemory(10000)
     num_hidden = 128
     seed = 42  # This is not randomly chosen
 

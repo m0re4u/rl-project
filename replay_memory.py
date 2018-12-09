@@ -37,7 +37,7 @@ class PrioritizedRankbasedMemory:
     def sample(self, batch_size):
         things = [(self.error_dict[m], m) for m in self.memory]
         things.sort(reverse=True)
-        probs = np.array([1/(n+1) for n in range(len(things))]) 
+        probs = np.array([1/(n+1) for n in range(len(things))])
         probs /= sum(probs)
         return np.random.choice([trans for error, trans in things], size = batch_size, p = probs)
 
@@ -61,7 +61,7 @@ class PrioritizedProportionalMemory:
 
     def sample(self, batch_size):
         things = [(self.error_dict[m], m) for m in self.memory]
-        probs = np.array([float(error) for error,mem in things]) 
+        probs = np.array([float(error) for error,mem in things])
         probs /= sum(probs)
         return np.random.choice([trans for error, trans in things], size = batch_size, p = probs)
 
@@ -69,7 +69,7 @@ class PrioritizedProportionalMemory:
         self.error_dict[transition] = new_error
 
     def __len__(self):
-        return len(memory)    
+        return len(memory)
 
 class PrioritizedGreedyMemory:
     def __init__(self, capacity):
@@ -95,7 +95,7 @@ class PrioritizedGreedyMemory:
         self.error_dict[transition] = new_error
 
     def __len__(self):
-        return len(memory)    
+        return len(memory)
 
 
 if __name__ == '__main__':
