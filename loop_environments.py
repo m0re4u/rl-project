@@ -51,6 +51,10 @@ def create_env(env_name):
 
             worlds.append(WindyGridworldEnv(shapes[i], winds, goal_states[i]))
         return worlds
+    elif env_name == "SimpleRectangleWorld":
+        return GridworldEnv(shape=[10,4])
+    elif env_name == "LargeRectangleWorld":
+        return GridworldEnv(shape=[15,31])
     else:
         return [gym.envs.make(env_name)]
 
@@ -102,14 +106,14 @@ if __name__ == "__main__":
     random.seed(seed)
     torch.manual_seed(seed)
 
-    gridworlds = ["SimpleGridWorld", "MediumGridWorld", "LargeGridWorld", "HugeGridWorld"]
+    gridworlds = ["SimpleGridWorld", "MediumGridWorld", "LargeGridWorld", "HugeGridWorld", "SimpleRectangleWorld", "LargeRectangleWorld"]
     envs = [
         "CartPole-v0",
         "Acrobot-v1",
         "MountainCar-v0",
         "Pendulum-v0",
-        *gridworlds,
-        "WindyGridWorld"
+        "WindyGridWorld",
+        *gridworlds
     ]
 
     for env_name in envs:
