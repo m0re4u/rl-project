@@ -4,10 +4,16 @@ import random
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import numpy as np
 
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
 from replay_memory import ReplayMemory
+
+
+def smooth(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
 
 
 if __name__ == "__main__":
@@ -27,7 +33,7 @@ if __name__ == "__main__":
         "CartPole-v0",
         "Acrobot-v1",
         "MountainCar-v0",
-        # "Pendulum-v0"
+        "Pendulum-v0"
     ]
 
     for env_name in envs:
@@ -42,5 +48,8 @@ if __name__ == "__main__":
             model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
         episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
         plt.clf()
-        plt.plot(episode_durations)
+
+        # And see the results
+        plt.plot(smooth(episode_durations, 10))
+        plt.title('Episode durations per episode')
         plt.savefig(f"test-{env_name}.png")

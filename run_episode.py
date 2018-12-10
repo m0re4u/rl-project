@@ -47,14 +47,18 @@ def select_action(model, state, actions, epsilon):
         if type(actions) == gym.spaces.Discrete:
             return random.choice(list(range(actions.n)))
         elif type(actions) == gym.spaces.Box:
-            return np.random.uniform(low=actions.low, high=actions.high, size=actions.low.shape)
+            return torch.tensor(actions.low) + torch.rand(actions.low.shape) * (torch.tensor(actions.high) - torch.tensor(actions.low))
         else:
             raise NotImplementedError()
 
 
-def compute_q_val(model, state, action):
-    x = model(state)
-    return torch.gather(x, 1, action.view(-1, 1)).view(-1)
+def compute_q_val(model, state, action, action_type):
+    if action_type == gym.spaces.Discrete:
+        x = model(state)
+        return torch.gather(x, 1, action.view(-1, 1)).view(-1)
+    elif action_type == gym.spaces.Box:
+        x = model(state).view(-1)
+        return x
 
 def compute_target(model, reward, next_state, done, discount_factor):
     # done is a boolean (vector) that indicates if next_state is terminal (episode is done)
@@ -63,7 +67,7 @@ def compute_target(model, reward, next_state, done, discount_factor):
     return reward + (discount_factor * val)
 
 
-def train(model, memory, optimizer, batch_size, discount_factor):
+def train(model, memory, optimizer, batch_size, discount_factor, action_type):
     # don't learn without some decent experience
     if len(memory) < batch_size:
         return None
@@ -76,13 +80,13 @@ def train(model, memory, optimizer, batch_size, discount_factor):
 
     # convert to PyTorch and define types
     state = torch.tensor(state, dtype=torch.float)
-    action = torch.tensor(action)  # Need 64 bit to use them as index
+    action = torch.tensor(np.array(list(action)))  # Need 64 bit to use them as index
     next_state = torch.tensor(next_state, dtype=torch.float)
     reward = torch.tensor(reward, dtype=torch.float)
     done = torch.tensor(done, dtype=torch.uint8)  # Boolean
 
     # compute the q value
-    q_val = compute_q_val(model, state, action)
+    q_val = compute_q_val(model, state, action, action_type)
 
     with torch.no_grad():  # Don't compute gradient info for the target (semi-gradient)
         target = compute_target(model, reward, next_state, done, discount_factor)
@@ -116,7 +120,7 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
             episode_length += 1
             global_steps += 1
 
-            loss = train(model, memory, optimizer, batch_size, discount_factor)
+            loss = train(model, memory, optimizer, batch_size, discount_factor, type(env.action_space))
         episode_durations.append(episode_length)
 
         if loss is not None:
