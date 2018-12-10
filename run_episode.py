@@ -27,47 +27,75 @@ def get_epsilon(it):
     else:
         return ep
 
+def discrete_state_to_onehot(state, batch_size, state_n=None):
+    indices = torch.from_numpy(np.array(state)).type(torch.int64).view(-1, 1)
+    state_n = state_n if state_n is not None else int(torch.max(indices)) + 1
+    one_hots = torch.zeros(indices.size()[0], state_n).scatter_(1, indices, 1)
+    one_hots = one_hots.view(*indices.shape, -1)
+    if batch_size == 1:
+        return one_hots.view(-1)
+    else:
+        return one_hots
 
-def select_action(model, state, actions, epsilon):
+
+def select_action(model, state, env, epsilon):
     p = random.random()
     if p > epsilon:
         # Select greedy action
         with torch.no_grad():
-            # _, ind = model(torch.Tensor(state)).max(0)
-            out = model(torch.Tensor(state))
-            val, ind = out.max(0)
-            if type(actions) == gym.spaces.Discrete:
-                return ind.item()
-            elif type(actions) == gym.spaces.Box:
-                return val
-
-
+            if type(env.observation_space) == gym.spaces.Discrete:
+                out = model(discrete_state_to_onehot(state, 1, env.observation_space.n))
+                val, ind = out.max(0)
+                if type(env.action_space) == gym.spaces.Discrete:
+                    return ind.item()
+                elif type(env.action_space) == gym.spaces.Box:
+                    return val
+            elif type(env.observation_space) == gym.spaces.Box:
+                out = model(torch.Tensor(state))
+                val, ind = out.max(0)
+                if type(env.action_space) == gym.spaces.Discrete:
+                    return ind.item()
+                elif type(env.action_space) == gym.spaces.Box:
+                    return val
     else:
         # Select random action
-        if type(actions) == gym.spaces.Discrete:
-            return random.choice(list(range(actions.n)))
-        elif type(actions) == gym.spaces.Box:
-            return torch.tensor(actions.low) + torch.rand(actions.low.shape) * (torch.tensor(actions.high) - torch.tensor(actions.low))
+        if type(env.action_space) == gym.spaces.Discrete:
+            return random.choice(list(range(env.action_space.n)))
+        elif type(env.action_space) == gym.spaces.Box:
+            return torch.tensor(env.action_space.low) + torch.rand(env.action_space.low.shape) * (torch.tensor(env.action_space.high) - torch.tensor(env.action_space.low))
         else:
             raise NotImplementedError()
 
 
-def compute_q_val(model, state, action, action_type):
-    if action_type == gym.spaces.Discrete:
+def compute_q_val(model, state, action, env):
+    if type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Box:
         x = model(state)
-        return torch.gather(x, 1, action.view(-1, 1)).view(-1)
-    elif action_type == gym.spaces.Box:
+        out = torch.gather(x, 1, action.view(-1, 1))
+        return out.view(-1)
+    elif type(env.action_space) == gym.spaces.Box and type(env.observation_space) == gym.spaces.Box:
         x = model(state).view(-1)
         return x
+    elif type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Discrete:
+        x = model(discrete_state_to_onehot(state, len(state), env.observation_space.n))
+        out = torch.gather(x.view(len(state), -1), 1, action.view(-1, 1))
+        return out.view(-1)
+    elif type(env.action_space) == gym.spaces.Box and type(env.observation_space) == gym.spaces.Discrete:
+        x = model(discrete_state_to_onehot(state, len(state), env.observation_space.n)).view(-1)
+        return x
 
-def compute_target(model, reward, next_state, done, discount_factor):
+def compute_target(model, reward, next_state, done, discount_factor, env):
     # done is a boolean (vector) that indicates if next_state is terminal (episode is done)
-    val, _ = model(next_state).max(1)
-    val[done] = 0
-    return reward + (discount_factor * val)
+    if type(env.observation_space) == gym.spaces.Box:
+        val, _ = model(next_state).max(1)
+        val[done] = 0
+        return reward + (discount_factor * val)
+    elif type(env.observation_space) == gym.spaces.Discrete:
+        val, _ = model(discrete_state_to_onehot(next_state, len(next_state), env.observation_space.n)).view(len(next_state), -1).max(1)
+        val[done] = 0
+        return reward + (discount_factor * val)
 
 
-def train(model, memory, optimizer, batch_size, discount_factor, action_type):
+def train(model, memory, optimizer, batch_size, discount_factor, env):
     # don't learn without some decent experience
     if len(memory) < batch_size:
         return None
@@ -86,10 +114,10 @@ def train(model, memory, optimizer, batch_size, discount_factor, action_type):
     done = torch.tensor(done, dtype=torch.uint8)  # Boolean
 
     # compute the q value
-    q_val = compute_q_val(model, state, action, action_type)
+    q_val = compute_q_val(model, state, action, env)
 
     with torch.no_grad():  # Don't compute gradient info for the target (semi-gradient)
-        target = compute_target(model, reward, next_state, done, discount_factor)
+        target = compute_target(model, reward, next_state, done, discount_factor, env)
 
     # loss is measured from error between current and newly expected Q values
     loss = F.smooth_l1_loss(q_val, target)
@@ -113,14 +141,14 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
         episode_length = 0
 
         while not done:
-            a = select_action(model, s, env.action_space, get_epsilon(global_steps))
+            a = select_action(model, s, env, get_epsilon(global_steps))
             s_next, r, done, _ = env.step(a)
             memory.push((s, a, r, s_next, done))
             s = s_next
             episode_length += 1
             global_steps += 1
 
-            loss = train(model, memory, optimizer, batch_size, discount_factor, type(env.action_space))
+            loss = train(model, memory, optimizer, batch_size, discount_factor, env)
         episode_durations.append(episode_length)
 
         if loss is not None:

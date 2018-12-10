@@ -9,6 +9,8 @@ import numpy as np
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
 from replay_memory import ReplayMemory
+from gridworld import GridworldEnv
+
 
 
 def smooth(x, N):
@@ -33,23 +35,32 @@ if __name__ == "__main__":
         "CartPole-v0",
         "Acrobot-v1",
         "MountainCar-v0",
-        "Pendulum-v0"
+        "Pendulum-v0",
+        "SimpleGridWorldEnv"
     ]
 
     for env_name in envs:
-        env = gym.envs.make(env_name)
+        if env_name == "SimpleGridWorldEnv":
+            env = GridworldEnv()
+        else:
+            env = gym.envs.make(env_name)
         print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
         env.seed(seed)
         memory = ReplayMemory(mem_size)
-        if type(env.action_space) == gym.spaces.Box:
-            print(env.action_space.low.shape[0])
+        if type(env.action_space) == gym.spaces.Box and type(env.observation_space) == gym.spaces.Box:
             model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.low.shape[0])
-        elif type(env.action_space) == gym.spaces.Discrete:
-            model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
+        elif type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Box:
+            model = QNetwork(env.observation_space.low.shape[0], num_hidden, env.action_space.n)
+        elif type(env.action_space) == gym.spaces.Box and type(env.observation_space) == gym.spaces.Discrete:
+            model = QNetwork(env.observation_space.n, num_hidden, env.action_space.low.shape[0])
+        elif type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Discrete:
+            model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
+        else:
+            raise NotImplementedError()
         episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
-        plt.clf()
 
         # And see the results
+        plt.clf()
         plt.plot(smooth(episode_durations, 10))
         plt.title('Episode durations per episode')
         plt.savefig(f"test-{env_name}.png")
