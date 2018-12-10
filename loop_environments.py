@@ -9,7 +9,8 @@ import numpy as np
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
 from replay_memory import ReplayMemory
-from gridworld import GridworldEnv, WindyGridworldEnv
+from gridworld import GridworldEnv
+# , WindyGridworldEnv
 
 def smooth(x, N):
     """
@@ -23,40 +24,40 @@ def create_env(env_name):
     Create/load the environment associated with :env_name
     """
     if env_name == "SimpleGridWorld":
-        return [GridworldEnv()]
+        return GridworldEnv()
     elif env_name == "MediumGridWorld":
-        return [GridworldEnv(shape=[10,10])]
+        return GridworldEnv(shape=[10,10])
     elif env_name == "LargeGridWorld":
-        return [GridworldEnv(shape=[20,20])]
+        return GridworldEnv(shape=[20,20])
     elif env_name == "HugeGridWorld":
-        return [GridworldEnv(shape=[31,31])]
-    elif env_name == "WindyGridWorld":
-        shapes = [(7, 10), (10, 10), (20, 5), (30, 15), (8, 12)]
-        wind_strengths = [((0, 1, 2, 9), (3, 4, 5, 8), (6, 7)),
-                          ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)),
-                          ((0, 1), (2, 3), (4)),
-                          ((5, 6, 7, 8, 12, 14), (0, 1, 2, 3, 13), (4), (9, 10, 11)),
-                          ((0, 1, 2, 3, 10, 11), (5), (4), (6, 7), (8, 9))]
-        goal_states = [(3, 7), (9, 8), (12, 3), (7, 8), (8, 12)]
-        worlds = []
+        return GridworldEnv(shape=[31,31])
+    # elif env_name == "WindyGridWorld":
+    #     shapes = [(7, 10), (10, 10), (20, 5), (30, 15), (8, 12)]
+    #     wind_strengths = [((0, 1, 2, 9), (3, 4, 5, 8), (6, 7)),
+    #                       ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)),
+    #                       ((0, 1), (2, 3), (4)),
+    #                       ((5, 6, 7, 8, 12, 14), (0, 1, 2, 3, 13), (4), (9, 10, 11)),
+    #                       ((0, 1, 2, 3, 10, 11), (5), (4), (6, 7), (8, 9))]
+    #     goal_states = [(3, 7), (9, 8), (12, 3), (7, 8), (8, 12)]
+    #     worlds = []
 
-        for i in range(len(shapes)):
-            winds = np.zeros(shapes[i])
+    #     for i in range(len(shapes)):
+    #         winds = np.zeros(shapes[i])
 
-            for j in range(len(wind_strengths[i])):
-                if isinstance(wind_strengths[i][j], tuple):
-                    winds[:, list(wind_strengths[i][j])] = j
-                else:
-                    winds[:, wind_strengths[i][j]] = j
+    #         for j in range(len(wind_strengths[i])):
+    #             if isinstance(wind_strengths[i][j], tuple):
+    #                 winds[:, list(wind_strengths[i][j])] = j
+    #             else:
+    #                 winds[:, wind_strengths[i][j]] = j
 
-            worlds.append(WindyGridworldEnv(shapes[i], winds, goal_states[i]))
-        return worlds
+    #         worlds.append(WindyGridworldEnv(shapes[i], winds, goal_states[i]))
+    #     return worlds
     elif env_name == "SimpleRectangleWorld":
         return GridworldEnv(shape=[10,4])
     elif env_name == "LargeRectangleWorld":
         return GridworldEnv(shape=[15,31])
     else:
-        return [gym.envs.make(env_name)]
+        return gym.envs.make(env_name)
 
 def create_model(env):
     """
@@ -95,7 +96,7 @@ def plot_episode_rewards(rewards, env_name):
     plt.savefig(f"{env_name}_rewards.png")
 
 if __name__ == "__main__":
-    num_episodes = 100
+    num_episodes = 1
     batch_size = 64
     discount_factor = 0.8
     mem_size = 10000
@@ -112,21 +113,20 @@ if __name__ == "__main__":
         "Acrobot-v1",
         "MountainCar-v0",
         "Pendulum-v0",
-        "WindyGridWorld",
+        # "WindyGridWorld",
         *gridworlds
     ]
 
     for env_name in envs:
-        created_envs = create_env(env_name)
+        print(f"Name: {env_name}")
+        env = create_env(env_name)
 
-        for env in created_envs:
-            print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
+        print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
 
+        env.seed(seed)
+        memory = ReplayMemory(mem_size)
+        model = create_model(env)
+        episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
 
-            env.seed(seed)
-            memory = ReplayMemory(mem_size)
-            model = create_model(env)
-            episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
-
-            plot_episode_durations(episode_durations, env_name)
-            plot_episode_rewards(episode_rewards, env_name)
+        plot_episode_durations(episode_durations, env_name)
+        plot_episode_rewards(episode_rewards, env_name)
