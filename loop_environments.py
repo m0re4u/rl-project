@@ -9,8 +9,7 @@ import numpy as np
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
 from replay_memory import ReplayMemory
-from gridworld import GridworldEnv
-
+from gridworld import GridworldEnv, WindyGridworldEnv
 
 
 def smooth(x, N):
@@ -36,12 +35,32 @@ if __name__ == "__main__":
         "Acrobot-v1",
         "MountainCar-v0",
         "Pendulum-v0",
-        "SimpleGridWorldEnv"
+        "SimpleGridWorldEnv",
+        "WindyGridWorldEnv"
     ]
 
     for env_name in envs:
         if env_name == "SimpleGridWorldEnv":
             env = GridworldEnv()
+        elif env_name == "WindyGridWorldEnv":
+            shapes = [(7, 10), (10, 10), (20, 5), (30, 15), (8, 12)]
+            wind_strengths = [((0, 1, 2, 9), (3, 4, 5, 8), (6, 7)),
+                              ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)),
+                              ((0, 1), (2, 3), (4)),
+                              ((5, 6, 7, 8, 12, 14), (0, 1, 2, 3, 13), (4), (9, 10, 11)),
+                              ((0, 1, 2, 3, 10, 11), (5), (4), (6, 7), (8, 9))]
+            goal_states = [(3, 7), (9, 8), (12, 3), (7, 8), (8, 12)]
+
+            for i in range(len(shapes)):
+                winds = np.zeros(shapes[i])
+
+                for j in range(len(wind_strengths[i])):
+                    if isinstance(wind_strengths[i][j], tuple):
+                        winds[:, list(wind_strengths[i][j])] = j
+                    else:
+                        winds[:, wind_strengths[i][j]] = j
+                env = WindyGridworldEnv(shapes[i], winds, goal_states[i])
+
         else:
             env = gym.envs.make(env_name)
         print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
