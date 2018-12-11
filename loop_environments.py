@@ -48,28 +48,18 @@ def load_maze(maze_name, maze_size=(8,8)):
 
 
 def create_windy_gridworld(shape, wind_strengths, goal):
-    pass
-    # shapes = [(7, 10), (10, 10), (20, 5), (30, 15), (8, 12)]
-    # wind_strengths = [(),
-    #                     ,
-    #                     ,
-    #                     ,
-    #                     ((0, 1, 2, 3, 10, 11), (5), (4), (6, 7), (8, 9))]
-    # goal_states = [(3, 7), (9, 8), (12, 3), (7, 8), (8, 12)]
-    # worlds = []
+    """
+    Create Windy Gridworld with given wind strengths, shape and goal state.
+    """
+    winds = np.zeros(shape)
 
-    # for i in range(len(shapes)):
-    #     winds = np.zeros(shapes[i])
-
-    #     for j in range(len(wind_strengths[i])):
-    #         if isinstance(wind_strengths[i][j], tuple):
-    #             winds[:, list(wind_strengths[i][j])] = j
-    #         else:
-    #             winds[:, wind_strengths[i][j]] = j
-
-    #     worlds.append(WindyGridworldEnv(shapes[i], winds, goal_states[i]))
-    # return worlds
-
+    for j in range(len(wind_strengths[i])):
+        if isinstance(wind_strengths[i][j], tuple):
+            winds[:, list(wind_strengths[i][j])] = j
+        else:
+            winds[:, wind_strengths[i][j]] = j
+    env = WindyGridworldEnv(shape, winds, goal_state)
+    return env
 
 def create_env(env_name):
     """
