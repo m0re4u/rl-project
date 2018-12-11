@@ -15,6 +15,7 @@ from tqdm import tqdm as _tqdm
 
 from replay_memory import ReplayMemory
 from QNetwork import QNetwork
+import copy
 
 def tqdm(*args, **kwargs):
     return _tqdm(*args, **kwargs, mininterval=1)  # Safety, do not overflow buffer
@@ -156,10 +157,74 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
     return episode_durations
 
 
-if __name__ == "__main__":
 
-    env = gym.envs.make("Acrobot-v1")
-    print(f"Action space: {env.action_space} - State space: {env.observation_space}")
+def experience_her_episode(env,goal,global_steps):
+    s = env.reset()
+    state_goal=np.concatenate([s, goal], axis=-1)
+    done = False
+    episode_length = 0
+    experience = []
+    while not done:
+        a = select_action(model, state_goal, env, get_epsilon(global_steps))
+        s_next, r, done, _ = env.step(a)
+        experience.append((s, a, r, s_next,done))
+        state_goal = np.concatenate([s_next, goal], axis=-1)
+        s=s_next
+        episode_length += 1
+    return experience,episode_length
+
+def eval_her_episode(episode,extract_goal,calc_reward, her_type="future"):
+    '''
+    her_type = ["future","episode","last"]
+    '''
+    new_experience = []
+    for i,(s, a, r, sn,done) in enumerate(episode):
+        if her_type == "future":
+            samples = np.random.randint(i, len(episode), size=3)
+        elif her_type == "episode":
+            samples = np.random.randint(0, len(episode), size=3)
+        else:
+            samples = [-1]
+        for sample in samples:
+            goal = extract_goal(episode[sample][0])
+            reward = calc_reward(s, a, goal)
+            new_experience.append((np.concatenate([s, goal], axis=-1),a,reward,np.concatenate([sn, goal], axis=-1),done))
+
+    return new_experience
+
+def run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size,
+                        discount_factor,learn_rate,sample_goal,extract_goal,calc_reward):
+    optimizer = optim.Adam(model.parameters(), learn_rate)
+
+    global_steps = 0  # Count the steps (do not reset at episode start, to compute epsilon)
+    episode_durations = []  #
+    for epoch in range(epochs):
+        episode_lengths = []
+        for i in range(num_episodes):
+            goal = sample_goal()
+            episode, episode_length = experience_her_episode(env, goal,global_steps)
+            episode_lengths.append(episode_length)
+            for s, a, r, sn, done in episode:
+                goal_s = np.concatenate([s, goal], axis = -1)
+                goal_sn = np.concatenate([sn, goal], axis=-1)
+                memory.push((goal_s, a, r, goal_sn, done))
+
+            her_experience = eval_her_episode(episode, extract_goal,calc_reward)
+            for transition in her_experience:
+                 memory.push(transition)
+
+
+        for training_step in range(training_steps):
+            loss = train(model, memory, optimizer, batch_size, discount_factor,env)
+
+        episode_durations.append(np.mean(episode_lengths))
+        global_steps+=1
+        # if loss is not None:
+        #     print("Episode: {:4d} | Loss: {}".format(i, loss))
+    return episode_durations
+
+
+if __name__ == "__main__":
 
     # Let's run it!
     num_episodes = 100
@@ -170,14 +235,47 @@ if __name__ == "__main__":
     num_hidden = 128
     seed = 42  # This is not randomly chosen
 
+    # env = gym.envs.make("Acrobot-v1")
+    # print(f"Action space: {env.action_space} - State space: {env.observation_space}")
+    # # We will seed the algorithm (before initializing QNetwork!) for reproducability
+    # random.seed(seed)
+    # torch.manual_seed(seed)
+    # env.seed(seed)
+    # print(env.observation_space.shape)
+    # print(env.action_space.shape)
+    # model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
+
+    # episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+    # plt.plot(episode_durations)
+    # plt.savefig("test.png")
+
+
+
+    env = gym.envs.make("LunarLander-v2")
+    print(f"Action space: {env.action_space} - State space: {env.observation_space}")
+
     # We will seed the algorithm (before initializing QNetwork!) for reproducability
     random.seed(seed)
     torch.manual_seed(seed)
     env.seed(seed)
-    print(env.observation_space.shape)
-    print(env.action_space.shape)
-    model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
 
-    episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+
+    epochs = 100
+    training_steps = 10
+    her = True
+
+    sample_goal = lambda: (0, 0)
+    extract_goal = lambda state: state[0:2]
+    def calc_reward(state, action, goal):
+        distance = np.linalg.norm(np.array(state[0:2]) - np.array(goal))
+        return  - 100* distance
+
+    if her:
+        num_episodes = 5
+        model = QNetwork(env.observation_space.shape[0]+2, num_hidden, env.action_space.n)
+        episode_durations = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward)
+    else:
+        model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
+        episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
     plt.plot(episode_durations)
     plt.savefig("test.png")
