@@ -106,7 +106,7 @@ class PrioritizedGreedyMemory:
 
     def sample(self, batch_size):
         things = [(self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)], (s, a, r, s_p, done)) for s, a, r, s_p, done in self.memory]
-        things.sort(reverse=True)
+        things.sort(reverse=True, key=lambda tup: tup[0])
         result = [trans for error, trans in things[:batch_size]]
         if len(result) < batch_size:
             return (result * int((batch_size/len(result))+1))[:batch_size]
