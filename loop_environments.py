@@ -6,6 +6,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
@@ -16,6 +17,7 @@ import mazenv
 
 IMAGE_FOLDER = "images"
 MAZE_FOLDER = "mazes"
+RESULTS_FOLDER = "results"
 
 def smooth(x, N):
     """
@@ -146,6 +148,21 @@ def plot_episode_rewards(rewards, mem_names, env_name):
     plt.savefig(f"{env_name}_rewards.png")
 
 
+def save_results(durations, rewards, env_name, mem_name):
+    """
+    Saves the results in a Pickle file.
+    """
+
+    name = f"{env_name}" + "_" + f"{mem_name}" + "_"
+    file_name = os.path.join(RESULTS_FOLDER, name)
+
+    with open(file_name + "durations.pkl", "wb") as f:
+        pickle.dump(durations, f)
+
+    with open(file_name + "rewards.pkl", "wb") as f:
+        pickle.dump(rewards, f)
+
+
 if __name__ == "__main__":
     num_episodes = 10
     batch_size = 64
@@ -162,6 +179,8 @@ if __name__ == "__main__":
         os.mkdir(IMAGE_FOLDER)
     if not os.path.exists(MAZE_FOLDER):
         os.mkdir(MAZE_FOLDER)
+    if not os.path.exists(RESULTS_FOLDER):
+        os.mkdir(RESULTS_FOLDER)
 
     # All environments
     gridworlds = [
@@ -179,18 +198,18 @@ if __name__ == "__main__":
     ]
     envs = [
         "CartPole-v0",
-        "Acrobot-v1",
-        "MountainCar-v0",
-        "Pendulum-v0",
-        *gridworlds,
-        *mazeworlds
+        # "Acrobot-v1",
+        # "MountainCar-v0",
+        # "Pendulum-v0",
+        # *gridworlds,
+        # *mazeworlds
     ]
 
     # All types of experience replay
     mems = [
         "RandomReplay",
         # "RankBasedReplay", # works on every env besides grid and maze worlds
-        # "ProportionalReplay" # works on every env besides grid and maze worlds
+        # "ProportionalReplay", # works on every env besides grid and maze worlds
         # "GreedyReplay", # FIXME
     ]
 
@@ -207,6 +226,7 @@ if __name__ == "__main__":
             env.seed(seed)
             model = create_model(env)
             episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+            save_results(episode_durations, episode_rewards, env_name, mem_name)
             ep_durations.append(episode_durations)
             ep_rewards.append(episode_rewards)
         plot_episode_durations(ep_durations, mems, os.path.join(IMAGE_FOLDER, f"{env_name}"))
