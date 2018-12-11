@@ -9,7 +9,7 @@ import numpy as np
 
 from QNetwork import QNetwork
 from run_episode import run_episodes, train
-from replay_memory import ReplayMemory
+from replay_memory import ReplayMemory, PrioritizedGreedyMemory, PrioritizedRankbasedMemory, PrioritizedProportionalMemory
 from gridworld import GridworldEnv, WindyGridworldEnv
 
 import mazenv
@@ -109,31 +109,45 @@ def create_model(env):
     else:
         raise NotImplementedError()
 
+def create_mem(mem_name, mem_size):
+    if mem_name == "RandomReplay":
+        return ReplayMemory(mem_size)
+    elif mem_name == "GreedyReplay":
+        return PrioritizedGreedyMemory(mem_size)
+    elif mem_name == "RankBasedReplay":
+        return PrioritizedRankbasedMemory(mem_size)
+    elif mem_name == "ProportionalReplay":
+        return PrioritizedProportionalMemory(mem_size)
+    else:
+        raise NotImplementedError()
 
-def plot_episode_durations(durs, env_name):
+
+def plot_episode_durations(durs, mem_names, env_name):
     """
     Plot the episode durations (number of steps per episode).
     """
-    # And see the results
     plt.clf()
-    plt.plot(smooth(durs, 10))
+    for i, dur in enumerate(durs):
+        plt.plot(smooth(dur, 10), label=mem_names[i])
     plt.title('Episode durations per episode')
+    plt.legend()
     plt.savefig(f"{env_name}_durations.png")
 
 
-def plot_episode_rewards(rewards, env_name):
+def plot_episode_rewards(rewards, mem_names, env_name):
     """
     Plot the episode reward (total reward of each episode).
     """
-    # And see the results
     plt.clf()
-    plt.plot(rewards)
+    for i, reward in enumerate(rewards):
+        plt.plot(reward, label=mem_names[i])
     plt.title('Episode rewards per episode')
+    plt.legend()
     plt.savefig(f"{env_name}_rewards.png")
 
 
 if __name__ == "__main__":
-    num_episodes = 100
+    num_episodes = 10
     batch_size = 64
     discount_factor = 0.8
     mem_size = 10000
@@ -149,6 +163,7 @@ if __name__ == "__main__":
     if not os.path.exists(MAZE_FOLDER):
         os.mkdir(MAZE_FOLDER)
 
+    # All environments
     gridworlds = [
         "SimpleGridWorld",
         "MediumGridWorld",
@@ -171,16 +186,28 @@ if __name__ == "__main__":
         *mazeworlds
     ]
 
+    # All types of experience replay
+    mems = [
+        "RandomReplay",
+        # "RankBasedReplay", # works on every env besides grid and maze worlds
+        # "ProportionalReplay" # works on every env besides grid and maze worlds
+        # "GreedyReplay", # FIXME
+    ]
+
     for env_name in envs:
-        print(f"Name: {env_name}")
-        env = create_env(env_name)
+        ep_durations = []
+        ep_rewards = []
+        for mem_name in mems:
+            print(f"Loading environment: {env_name} - ER method: {mem_name}")
+            env = create_env(env_name)
+            memory = create_mem(mem_name, mem_size)
 
-        print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
+            print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
 
-        env.seed(seed)
-        memory = ReplayMemory(mem_size)
-        model = create_model(env)
-        episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
-
-        plot_episode_durations(episode_durations, os.path.join(IMAGE_FOLDER, env_name))
-        plot_episode_rewards(episode_rewards, os.path.join(IMAGE_FOLDER, env_name))
+            env.seed(seed)
+            model = create_model(env)
+            episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+            ep_durations.append(episode_durations)
+            ep_rewards.append(episode_rewards)
+        plot_episode_durations(ep_durations, mems, os.path.join(IMAGE_FOLDER, f"{env_name}"))
+        plot_episode_rewards(ep_rewards, mems, os.path.join(IMAGE_FOLDER, f"{env_name}"))
