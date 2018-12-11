@@ -92,7 +92,7 @@ def create_env(env_name):
     elif env_name == "MediumMazeWorld":
         return load_maze("MediumMazeWorld", (15, 15))
     elif env_name == "LargeMazeWorld":
-        return load_maze("MediumMazeWorld", (25, 25))
+        return load_maze("LargeMazeWorld", (25, 25))
     elif env_name == "SimpleWindyGridWorld":
         return create_windy_gridworld((10,10), ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)), (9,8))
     elif env_name == "MediumRectangularWindyGridWorld":
