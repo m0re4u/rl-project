@@ -4,12 +4,10 @@ import torch
 from collections import deque
 
 def hash_state(state):
-    # if type(state) == torch.Tensor:
-    #     print(state.size())
     if type(state) == np.int64 or type(state) == int:
         return int(state)
     elif type(state) == np.ndarray or type(state) == torch.Tensor and state.size() != []:
-        return tuple(state)
+        return state.__repr__()
     elif type(state) == torch.Tensor:
         return int(state)
     else:
