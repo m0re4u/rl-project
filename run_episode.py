@@ -135,11 +135,13 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
     optimizer = optim.Adam(model.parameters(), learn_rate)
 
     global_steps = 0  # Count the steps (do not reset at episode start, to compute epsilon)
-    episode_durations = []  #
+    episode_durations = []
+    episode_rewards = []
     for i in range(num_episodes):
         s = env.reset()
         done = False
         episode_length = 0
+        episode_reward = 0
 
         while not done:
             a = select_action(model, s, env, get_epsilon(global_steps))
@@ -148,13 +150,15 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
             s = s_next
             episode_length += 1
             global_steps += 1
+            episode_reward += r
 
             loss = train(model, memory, optimizer, batch_size, discount_factor, env)
         episode_durations.append(episode_length)
+        episode_rewards.append(episode_reward)
 
         if loss is not None:
             print("Episode: {:4d} | Loss: {}".format(i, loss))
-    return episode_durations
+    return episode_durations, episode_rewards
 
 
 
