@@ -128,9 +128,19 @@ def plot_episode_durations(durs, mem_names, env_name):
     """
     Plot the episode durations (number of steps per episode).
     """
+        # # "RandomReplay",
+        # # "RankBasedReplay", # works on every env besides grid and maze worlds
+        # "ProportionalReplay"
+
     plt.clf()
     for i, dur in enumerate(durs):
-        plt.plot(smooth(dur, 10), label=mem_names[i])
+        if mem_names[i] == "RandomReplay":
+            color = "blue"
+        elif mem_names[i] == "RankBasedReplay":
+            color = "yellow"
+        elif mem_names[i] == "ProportionalReplay":
+            color = "green"
+        plt.plot(smooth(dur, 10), label=mem_names[i], color=color)
     plt.title('Episode durations per episode')
     plt.legend()
     plt.savefig(f"{env_name}_durations.png")
@@ -142,7 +152,15 @@ def plot_episode_rewards(rewards, mem_names, env_name):
     """
     plt.clf()
     for i, reward in enumerate(rewards):
-        plt.plot(reward, label=mem_names[i])
+        if mem_names[i] == "RandomReplay":
+            color = "blue"
+        elif mem_names[i] == "RankBasedReplay":
+            color = "yellow"
+        elif mem_names[i] == "ProportionalReplay":
+            color = "green"
+        elif mem_names[i] == "GreedyReplay":
+            continue
+        plt.plot(reward, label=mem_names[i], color=color)
     plt.title('Episode rewards per episode')
     plt.legend()
     plt.savefig(f"{env_name}_rewards.png")
@@ -164,7 +182,7 @@ def save_results(durations, rewards, env_name, mem_name):
 
 
 if __name__ == "__main__":
-    num_episodes = 10
+    num_episodes = 250
     batch_size = 64
     discount_factor = 0.8
     mem_size = 10000
@@ -184,11 +202,11 @@ if __name__ == "__main__":
 
     # All environments
     gridworlds = [
-        "SimpleGridWorld",
-        "MediumGridWorld",
-        "LargeGridWorld",
-        "HugeGridWorld",
-        "SimpleRectangleWorld",
+        # "SimpleGridWorld",
+        # "MediumGridWorld",
+        # "LargeGridWorld",
+        # "HugeGridWorld",
+        # "SimpleRectangleWorld",
         "LargeRectangleWorld"
     ]
     mazeworlds = [
@@ -197,19 +215,19 @@ if __name__ == "__main__":
         "LargeMazeWorld"
     ]
     envs = [
-        "CartPole-v0",
+        # "CartPole-v0",
         # "Acrobot-v1",
         # "MountainCar-v0",
         # "Pendulum-v0",
-        # *gridworlds,
+        *gridworlds,
         # *mazeworlds
     ]
 
     # All types of experience replay
     mems = [
-        "RandomReplay",
+        # "RandomReplay",
         # "RankBasedReplay", # works on every env besides grid and maze worlds
-        # "ProportionalReplay", # works on every env besides grid and maze worlds
+        "ProportionalReplay", # works on every env besides grid and maze worlds
         # "GreedyReplay", # FIXME
     ]
 
