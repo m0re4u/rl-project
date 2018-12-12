@@ -167,7 +167,7 @@ if __name__ == "__main__":
     num_episodes = 10
     batch_size = 64
     discount_factor = 0.8
-    mem_size = 10000
+    mem_size = 500
     learn_rate = 1e-3
     num_hidden = 128
     seed = 42  # The answer to everything!
@@ -185,11 +185,11 @@ if __name__ == "__main__":
     # All environments
     gridworlds = [
         "SimpleGridWorld",
-        "MediumGridWorld",
-        "LargeGridWorld",
-        "HugeGridWorld",
-        "SimpleRectangleWorld",
-        "LargeRectangleWorld"
+        #"MediumGridWorld",
+        #"LargeGridWorld",
+        #"HugeGridWorld",
+        #"SimpleRectangleWorld",
+        #"LargeRectangleWorld"
     ]
     mazeworlds = [
         "SimpleMazeWorld",
@@ -197,20 +197,20 @@ if __name__ == "__main__":
         "LargeMazeWorld"
     ]
     envs = [
-        "CartPole-v0",
+        # "CartPole-v0",
         # "Acrobot-v1",
         # "MountainCar-v0",
         # "Pendulum-v0",
-        # *gridworlds,
+         *gridworlds,
         # *mazeworlds
     ]
 
     # All types of experience replay
     mems = [
-        "RandomReplay",
+        # "RandomReplay",
         # "RankBasedReplay", # works on every env besides grid and maze worlds
         # "ProportionalReplay", # works on every env besides grid and maze worlds
-        # "GreedyReplay", # FIXME
+        "GreedyReplay", # FIXME
     ]
 
     for env_name in envs:

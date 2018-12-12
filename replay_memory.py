@@ -10,7 +10,10 @@ def hash_state(state):
         return state.__repr__()
     elif type(state) == torch.Tensor:
         return int(state)
+    elif type(state) == float and abs(int(state) - state) < 0.0001:
+        return int(state)
     else:
+
         raise NotImplementedError(f"Hash does not exist for type {type(state)} - {state}")
 
 class ReplayMemory:
@@ -98,6 +101,7 @@ class PrioritizedGreedyMemory:
         self.error_dict = {}
 
     def push(self, transition, error):
+        print(len(self.error_dict), transition)
         self.memory.append(transition)
         s, a, r, s_p, done = transition
         self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)] = error
@@ -113,6 +117,7 @@ class PrioritizedGreedyMemory:
         return result
 
     def update_memory(self, transition, new_error):
+        print(transition)
         s, a, r, s_p, done = transition
         self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)] = new_error
 

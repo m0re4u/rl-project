@@ -125,7 +125,7 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     loss = F.smooth_l1_loss(q_val, target)
 
     for i in range(state.shape[0]):
-        memory.update_memory((state[i], action[i], reward[i], next_state[i], done[i]), loss.item())
+        memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), loss.item())
 
     # backpropagation of loss to Neural Network (PyTorch magic)
     optimizer.zero_grad()
