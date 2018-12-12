@@ -122,10 +122,11 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
         target = compute_target(model, reward, next_state, done, discount_factor, env)
 
     # loss is measured from error between current and newly expected Q values
-    loss = F.smooth_l1_loss(q_val, target)
+    unreduced_loss = F.smooth_l1_loss(q_val, target, reduction='none')
+    loss = torch.mean(unreduced_loss)
 
     for i in range(state.shape[0]):
-        memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), loss.item())
+        memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), unreduced_loss[i].item())
 
     # backpropagation of loss to Neural Network (PyTorch magic)
     optimizer.zero_grad()

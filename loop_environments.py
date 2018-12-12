@@ -55,12 +55,12 @@ def create_windy_gridworld(shape, wind_strengths, goal):
     """
     winds = np.zeros(shape)
 
-    for j in range(len(wind_strengths[i])):
-        if isinstance(wind_strengths[i][j], tuple):
-            winds[:, list(wind_strengths[i][j])] = j
+    for j in range(len(wind_strengths)):
+        if isinstance(wind_strengths[j], tuple):
+            winds[:, list(wind_strengths[j])] = j
         else:
-            winds[:, wind_strengths[i][j]] = j
-    env = WindyGridworldEnv(shape, winds, goal_state)
+            winds[:, wind_strengths[j]] = j
+    env = WindyGridworldEnv(shape, winds, goal)
     return env
 
 def create_env(env_name):
@@ -207,7 +207,10 @@ if __name__ == "__main__":
         # "LargeGridWorld",
         # "HugeGridWorld",
         # "SimpleRectangleWorld",
-        "LargeRectangleWorld"
+        # "LargeRectangleWorld",
+        "SimpleWindyGridWorld",
+        "MediumRectangularWindyGridWorld",
+        "LargeRectangularWindyGridWorld",
     ]
     mazeworlds = [
         "SimpleMazeWorld",
@@ -219,16 +222,16 @@ if __name__ == "__main__":
         # "Acrobot-v1",
         # "MountainCar-v0",
         # "Pendulum-v0",
-        *gridworlds,
+         *gridworlds,
         # *mazeworlds
     ]
 
     # All types of experience replay
     mems = [
-        # "RandomReplay",
-        # "RankBasedReplay", # works on every env besides grid and maze worlds
+        "RandomReplay",
+        "RankBasedReplay", # works on every env besides grid and maze worlds
         "ProportionalReplay", # works on every env besides grid and maze worlds
-        # "GreedyReplay", # FIXME
+        "GreedyReplay", # FIXME
     ]
 
     for env_name in envs:
