@@ -29,14 +29,16 @@ def get_epsilon(it):
         return ep
 
 def discrete_state_to_onehot(state, batch_size, state_n=None):
+
     indices = torch.from_numpy(np.array(state)).type(torch.int64).view(-1, 1)
     state_n = state_n if state_n is not None else int(torch.max(indices)) + 1
     one_hots = torch.zeros(indices.size()[0], state_n).scatter_(1, indices, 1)
     one_hots = one_hots.view(*indices.shape, -1)
+    # print("aaaaa",state,one_hots.view(batch_size,-1))
     if batch_size == 1:
         return one_hots.view(-1)
     else:
-        return one_hots
+        return one_hots.view(batch_size,-1)
 
 
 def select_action(model, state, env, epsilon):
@@ -77,6 +79,7 @@ def compute_q_val(model, state, action, env):
         x = model(state).view(-1)
         return x
     elif type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Discrete:
+        # print("-------------")
         x = model(discrete_state_to_onehot(state, len(state), env.observation_space.n))
         out = torch.gather(x.view(len(state), -1), 1, action.view(-1, 1))
         return out.view(-1)
@@ -91,7 +94,9 @@ def compute_target(model, reward, next_state, done, discount_factor, env):
         val[done] = 0
         return reward + (discount_factor * val)
     elif type(env.observation_space) == gym.spaces.Discrete:
-        val, _ = model(discrete_state_to_onehot(next_state, len(next_state), env.observation_space.n)).view(len(next_state), -1).max(1)
+        # print("target")
+        batch_n = next_state.shape[0]
+        val, _ = model(discrete_state_to_onehot(next_state, batch_n, env.observation_space.n)).view(batch_n, -1).max(1)
         val[done] = 0
         return reward + (discount_factor * val)
 
@@ -162,22 +167,34 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
 
 
 
-def experience_her_episode(env,goal,global_steps):
-    s = env.reset()
-    state_goal=np.concatenate([s, goal], axis=-1)
+def experience_her_episode(env,goal,global_steps,use_her=True):
+    s = np.reshape(np.array(env.reset()),-1)
+    if use_her:
+        state_goal = np.concatenate([s, goal], axis=-1)
+
     done = False
     episode_length = 0
+    episode_reward = 0
     experience = []
     while not done:
-        a = select_action(model, state_goal, env, get_epsilon(global_steps))
-        s_next, r, done, _ = env.step(a)
-        experience.append((s, a, r, s_next,done))
-        state_goal = np.concatenate([s_next, goal], axis=-1)
-        s=s_next
-        episode_length += 1
-    return experience,episode_length
+        r=0
+        if use_her:
+            a = select_action(model, state_goal, env, get_epsilon(global_steps))
+            s_next, r, done, _ = env.step(a)
+            experience.append((s, a, r, s_next,done))
+            state_goal = np.concatenate([np.reshape(np.array(s_next),-1), goal], axis=-1)
+            s = s_next
+        else:
+            a = select_action(model, s, env, get_epsilon(global_steps))
+            s_next, r, done, _ = env.step(a)
+            experience.append((s, a, r, s_next, done))
+            s = s_next
 
-def eval_her_episode(episode,extract_goal,calc_reward, her_type="future"):
+        episode_length += 1
+        episode_reward += r
+    return experience,episode_length, episode_reward
+
+def eval_her_episode(episode,extract_goal,calc_reward, her_type="episode"):
     '''
     her_type = ["future","episode","last"]
     '''
@@ -192,47 +209,57 @@ def eval_her_episode(episode,extract_goal,calc_reward, her_type="future"):
         for sample in samples:
             goal = extract_goal(episode[sample][0])
             reward = calc_reward(s, a, goal)
-            new_experience.append((np.concatenate([s, goal], axis=-1),a,reward,np.concatenate([sn, goal], axis=-1),done))
+            new_experience.append((np.concatenate([np.reshape(np.array(s),-1), goal], axis=-1),a,reward,np.concatenate([np.reshape(np.array(sn),-1), goal], axis=-1),done))
 
     return new_experience
 
 def run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size,
-                        discount_factor,learn_rate,sample_goal,extract_goal,calc_reward):
+                        discount_factor,learn_rate,sample_goal,extract_goal,calc_reward,use_her=True):
     optimizer = optim.Adam(model.parameters(), learn_rate)
 
     global_steps = 0  # Count the steps (do not reset at episode start, to compute epsilon)
-    episode_durations = []  #
+    episode_lengths_epoch = []
+    episode_rewards_epoch = []
     for epoch in range(epochs):
         episode_lengths = []
+        episode_rewards = []
+        loss = None
         for i in range(num_episodes):
             goal = sample_goal()
-            episode, episode_length = experience_her_episode(env, goal,global_steps)
+            episode, episode_length,episode_reward = experience_her_episode(env, goal,global_steps,use_her)
             episode_lengths.append(episode_length)
+            episode_rewards.append(episode_reward)
             for s, a, r, sn, done in episode:
-                goal_s = np.concatenate([s, goal], axis = -1)
-                goal_sn = np.concatenate([sn, goal], axis=-1)
-                memory.push((goal_s, a, r, goal_sn, done))
+                if use_her:
+                    goal_s = np.concatenate([ np.reshape(np.array(s),-1), goal], axis = -1)
+                    goal_sn = np.concatenate([ np.reshape(np.array(sn),-1), goal], axis=-1)
+                    memory.push((goal_s, a, r, goal_sn, done))
+                else:
+                    memory.push((s, a, r, sn, done))
 
-            her_experience = eval_her_episode(episode, extract_goal,calc_reward)
-            for transition in her_experience:
-                 memory.push(transition)
+            if use_her:
+                her_experience = eval_her_episode(episode, extract_goal,calc_reward)
+                for transition in her_experience:
+                    memory.push(transition)
 
 
         for training_step in range(training_steps):
             loss = train(model, memory, optimizer, batch_size, discount_factor,env)
-
-        episode_durations.append(np.mean(episode_lengths))
+        if loss is not None:
+            print("Epoch: {:4d} | Loss: {}".format(epoch, loss))
+        episode_lengths_epoch.append(np.mean(episode_lengths))
+        episode_rewards_epoch.append(np.mean(episode_rewards))
         global_steps+=1
         # if loss is not None:
         #     print("Episode: {:4d} | Loss: {}".format(i, loss))
-    return episode_durations
+    return episode_lengths_epoch, episode_rewards_epoch
 
 
 if __name__ == "__main__":
 
     # Let's run it!
-    num_episodes = 100
-    batch_size = 64
+    num_episodes = 300
+    batch_size = 10
     discount_factor = 0.8
     learn_rate = 1e-3
     memory = ReplayMemory(10000)
@@ -245,6 +272,7 @@ if __name__ == "__main__":
     # random.seed(seed)
     # torch.manual_seed(seed)
     # env.seed(seed)
+
     # print(env.observation_space.shape)
     # print(env.action_space.shape)
     # model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
@@ -254,8 +282,9 @@ if __name__ == "__main__":
     # plt.savefig("test.png")
 
 
-
-    env = gym.envs.make("LunarLander-v2")
+    import loop_environments
+    env = loop_environments.create_env("LargeGridWorld")
+    # env = gym.envs.make("LunarLander-v2")
     print(f"Action space: {env.action_space} - State space: {env.observation_space}")
 
     # We will seed the algorithm (before initializing QNetwork!) for reproducability
@@ -264,22 +293,44 @@ if __name__ == "__main__":
     env.seed(seed)
 
 
-    epochs = 100
-    training_steps = 10
+
     her = True
+#  lander
+    # sample_goal = lambda: (0, 0)
+    # extract_goal = lambda state: state[0:2]
+    # def calc_reward(state, action, goal):
+    #     distance = np.linalg.norm(np.array(state[0:2]) - np.array(goal))
+    #     return  - 100* distance
 
-    sample_goal = lambda: (0, 0)
-    extract_goal = lambda state: state[0:2]
+# functions for grid world
+    def sample_goal():
+        return np.random.choice([0, env.observation_space.n - 1], 1)
+    extract_goal = lambda state: np.reshape(np.array(np.argmax(state)),-1)
     def calc_reward(state, action, goal):
-        distance = np.linalg.norm(np.array(state[0:2]) - np.array(goal))
-        return  - 100* distance
-
+        if state == goal:
+            return 0.0
+        else:
+            return -1.0
+# # maze
+#     def sample_goal():
+#         return env.maze.end_pos
+#     extract_goal = lambda state: np.reshape(np.array(np.argmax(state)),-1)
+#     def calc_reward(state, action, goal):
+#         if state == goal:
+#             return 0.0
+#         else:
+#             return -1.0
+    num_episodes = 5
+    epochs = 600
+    training_steps = 10
+    print(env.reset())
     if her:
-        num_episodes = 5
-        model = QNetwork(env.observation_space.shape[0]+2, num_hidden, env.action_space.n)
-        episode_durations = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward)
+        # model = QNetwork(env.observation_space.shape[0]+2, num_hidden, env.action_space.n)
+        model = QNetwork(2*env.observation_space.n, num_hidden, env.action_space.n)
+        episode_durations,episode_rewards  = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward)
     else:
-        model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
-        episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
-    plt.plot(episode_durations)
+        model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
+        episode_durations,episode_rewards = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward,use_her=False)
+
+    plt.plot(loop_environments.smooth(episode_durations, 10))
     plt.savefig("test.png")
