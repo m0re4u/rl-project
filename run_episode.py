@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch import optim
 from tqdm import tqdm as _tqdm
 
-from replay_memory import ReplayMemory
+from replay_memory import ReplayMemory, PrioritizedGreedyMemory, PrioritizedRankbasedMemory, PrioritizedProportionalMemory
 from QNetwork import QNetwork
 import copy
 
@@ -81,6 +81,7 @@ def compute_q_val(model, state, action, env):
     elif type(env.action_space) == gym.spaces.Discrete and type(env.observation_space) == gym.spaces.Discrete:
         # print("-------------")
         x = model(discrete_state_to_onehot(state, len(state), env.observation_space.n))
+        action = action.type(torch.LongTensor)
         out = torch.gather(x.view(len(state), -1), 1, action.view(-1, 1))
         return out.view(-1)
     elif type(env.action_space) == gym.spaces.Box and type(env.observation_space) == gym.spaces.Discrete:
@@ -128,6 +129,9 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     # loss is measured from error between current and newly expected Q values
     loss = F.smooth_l1_loss(q_val, target)
 
+    for i in range(state.shape[0]):
+        memory.update_memory((state[i], action[i], reward[i], next_state[i], done[i]), loss.item())
+
     # backpropagation of loss to Neural Network (PyTorch magic)
     optimizer.zero_grad()
     loss.backward()
@@ -151,13 +155,15 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
         while not done:
             a = select_action(model, s, env, get_epsilon(global_steps))
             s_next, r, done, _ = env.step(a)
-            memory.push((s, a, r, s_next, done))
-            s = s_next
             episode_length += 1
             global_steps += 1
             episode_reward += r
 
             loss = train(model, memory, optimizer, batch_size, discount_factor, env)
+            if loss is None:
+                loss = 1000
+            memory.push((s, a, r, s_next, done), loss)
+            s = s_next
         episode_durations.append(episode_length)
         episode_rewards.append(episode_reward)
 
