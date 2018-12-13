@@ -114,11 +114,11 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     state, action, reward, next_state, done = zip(*transitions)
 
     # convert to PyTorch and define types
-    state = torch.tensor(state, dtype=torch.float)
     action = torch.tensor(np.array(list(action)))  # Need 64 bit to use them as index
     next_state = torch.tensor(next_state, dtype=torch.float)
     reward = torch.tensor(reward, dtype=torch.float)
     done = torch.tensor(done, dtype=torch.uint8)  # Boolean
+    state = torch.tensor(state, dtype=torch.float)
 
     # compute the q value
     q_val = compute_q_val(model, state, action, env)
@@ -156,9 +156,8 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
             a = select_action(model, s, env, get_epsilon(global_steps))
             s_next, r, done, _ = env.step(a)
             episode_length += 1
-            global_steps += 1
             episode_reward += r
-
+            global_steps += 1
             loss = train(model, memory, optimizer, batch_size, discount_factor, env)
             if loss is None:
                 loss = 1000
@@ -167,40 +166,33 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
         episode_durations.append(episode_length)
         episode_rewards.append(episode_reward)
 
+
         if loss is not None:
             print("Episode: {:4d} | Loss: {}".format(i, loss))
     return episode_durations, episode_rewards
 
 
 
-def experience_her_episode(env,goal,global_steps,use_her=True):
-    s = np.reshape(np.array(env.reset()),-1)
-    if use_her:
-        state_goal = np.concatenate([s, goal], axis=-1)
+def experience_her_episode(env,goal,batch,global_steps):
+    s = np.reshape(np.array(env.reset()), -1)
+    state_goal = np.concatenate([s, goal], axis=-1)
 
     done = False
     episode_length = 0
     episode_reward = 0
     experience = []
-    while not done:
-        r=0
-        if use_her:
-            a = select_action(model, state_goal, env, get_epsilon(global_steps))
-            s_next, r, done, _ = env.step(a)
-            experience.append((s, a, r, s_next,done))
-            state_goal = np.concatenate([np.reshape(np.array(s_next),-1), goal], axis=-1)
-            s = s_next
-        else:
-            a = select_action(model, s, env, get_epsilon(global_steps))
-            s_next, r, done, _ = env.step(a)
-            experience.append((s, a, r, s_next, done))
-            s = s_next
+    while not done and episode_length<batch:
+        a = select_action(model, state_goal, env, get_epsilon(global_steps))
+        s_next, r, done, _ = env.step(a)
+        experience.append((s, a, r, s_next,done))
+        state_goal = np.concatenate([np.reshape(np.array(s_next),-1), goal], axis=-1)
+        s = s_next
 
         episode_length += 1
         episode_reward += r
     return experience,episode_length, episode_reward
 
-def eval_her_episode(episode,extract_goal,calc_reward, her_type="episode"):
+def eval_her_episode(episode,extract_goal,calc_reward, her_type="future"):
     '''
     her_type = ["future","episode","last"]
     '''
@@ -231,40 +223,42 @@ def run_her_episodes(train, model, memory, env, num_episodes, training_steps, ep
         episode_rewards = []
         loss = None
         for i in range(num_episodes):
-            goal = sample_goal()
-            episode, episode_length,episode_reward = experience_her_episode(env, goal,global_steps,use_her)
+            if use_her:
+                goal = sample_goal()
+            else:
+                goal = []
+            episode, episode_length,episode_reward = experience_her_episode(env, goal,600,global_steps)
+
             episode_lengths.append(episode_length)
             episode_rewards.append(episode_reward)
             for s, a, r, sn, done in episode:
-                if use_her:
-                    goal_s = np.concatenate([ np.reshape(np.array(s),-1), goal], axis = -1)
-                    goal_sn = np.concatenate([ np.reshape(np.array(sn),-1), goal], axis=-1)
-                    memory.push((goal_s, a, r, goal_sn, done))
-                else:
-                    memory.push((s, a, r, sn, done))
+                goal_s = np.concatenate([ np.reshape(np.array(s),-1), goal], axis = -1)
+                goal_sn = np.concatenate([ np.reshape(np.array(sn),-1), goal], axis=-1)
+                memory.push((goal_s, a, r, goal_sn, done),loss)
 
             if use_her:
                 her_experience = eval_her_episode(episode, extract_goal,calc_reward)
                 for transition in her_experience:
-                    memory.push(transition)
+                    memory.push(transition,loss)
 
+            for training_step in range(training_steps):
+                global_steps+=1
+                loss = train(model, memory, optimizer, batch_size, discount_factor,env)
 
-        for training_step in range(training_steps):
-            loss = train(model, memory, optimizer, batch_size, discount_factor,env)
         if loss is not None:
             print("Epoch: {:4d} | Loss: {}".format(epoch, loss))
         episode_lengths_epoch.append(np.mean(episode_lengths))
         episode_rewards_epoch.append(np.mean(episode_rewards))
-        global_steps+=1
         # if loss is not None:
         #     print("Episode: {:4d} | Loss: {}".format(i, loss))
     return episode_lengths_epoch, episode_rewards_epoch
 
 
 if __name__ == "__main__":
-
+    import loop_environments
+    env = loop_environments.create_env("SimpleWindyGridWorld")
     # Let's run it!
-    num_episodes = 300
+    num_episodes = 200
     batch_size = 10
     discount_factor = 0.8
     learn_rate = 1e-3
@@ -275,32 +269,33 @@ if __name__ == "__main__":
     # env = gym.envs.make("Acrobot-v1")
     # print(f"Action space: {env.action_space} - State space: {env.observation_space}")
     # # We will seed the algorithm (before initializing QNetwork!) for reproducability
-    # random.seed(seed)
-    # torch.manual_seed(seed)
-    # env.seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    env.seed(seed)
 
     # print(env.observation_space.shape)
     # print(env.action_space.shape)
-    # model = QNetwork(env.observation_space.shape[0], num_hidden, env.action_space.n)
+    # model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
 
-    # episode_durations = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+    # episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
     # plt.plot(episode_durations)
     # plt.savefig("test.png")
 
 
-    import loop_environments
-    env = loop_environments.create_env("LargeGridWorld")
-    # env = gym.envs.make("LunarLander-v2")
-    print(f"Action space: {env.action_space} - State space: {env.observation_space}")
+    # import loop_environments
+    # env = loop_environments.create_env("SimpleGridWorld")
+    # # env = gym.envs.make("LunarLander-v2")
+    # print(f"Action space: {env.action_space} - State space: {env.observation_space}")
 
-    # We will seed the algorithm (before initializing QNetwork!) for reproducability
-    random.seed(seed)
-    torch.manual_seed(seed)
-    env.seed(seed)
+    # # We will seed the algorithm (before initializing QNetwork!) for reproducability
+    # random.seed(seed)
+    # torch.manual_seed(seed)
+    # env.seed(seed)
 
 
 
-    her = True
+
 #  lander
     # sample_goal = lambda: (0, 0)
     # extract_goal = lambda state: state[0:2]
@@ -310,7 +305,8 @@ if __name__ == "__main__":
 
 # functions for grid world
     def sample_goal():
-        return np.random.choice([0, env.observation_space.n - 1], 1)
+        # return np.random.choice([0, env.observation_space.n - 1], 1)
+        return [38]
     extract_goal = lambda state: np.reshape(np.array(np.argmax(state)),-1)
     def calc_reward(state, action, goal):
         if state == goal:
@@ -326,9 +322,10 @@ if __name__ == "__main__":
 #             return 0.0
 #         else:
 #             return -1.0
-    num_episodes = 5
-    epochs = 600
-    training_steps = 10
+    num_episodes = 1
+    epochs = 250
+    training_steps = 3
+    her = False
     print(env.reset())
     if her:
         # model = QNetwork(env.observation_space.shape[0]+2, num_hidden, env.action_space.n)
@@ -338,5 +335,6 @@ if __name__ == "__main__":
         model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
         episode_durations,episode_rewards = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward,use_her=False)
 
-    plt.plot(loop_environments.smooth(episode_durations, 10))
+    loop_environments.save_results(episode_durations,episode_rewards,"MediumGridWorld","Random")
+    plt.plot(loop_environments.smooth(episode_durations, 5))
     plt.savefig("test.png")
