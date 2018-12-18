@@ -7,7 +7,7 @@ def hash_state(state):
     if type(state) == np.int64 or type(state) == int:
         return int(state)
     elif type(state) == np.ndarray or type(state) == torch.Tensor and state.size() != []:
-        return state.__repr__()
+        return str(state)
     elif type(state) == torch.Tensor:
         return int(state)
     elif type(state) == float and abs(int(state) - state) < 0.0001:
@@ -17,7 +17,7 @@ def hash_state(state):
         raise NotImplementedError(f"Hash does not exist for type {type(state)} - {state}")
 
 class ReplayMemory:
-    def __init__(self, capacity):
+    def __init__(self, capacity, alpha=None, beta=None):
         self.capacity = capacity
         self.memory = deque()
 
@@ -28,7 +28,7 @@ class ReplayMemory:
             self.memory.popleft()
 
     def sample(self, batch_size):
-        return random.sample(self.memory, k=batch_size)
+        return random.sample(self.memory, k=batch_size), np.ones(batch_size)
 
     def update_memory(self, transition, new_error):
         pass
@@ -37,7 +37,9 @@ class ReplayMemory:
         return len(self.memory)
 
 class PrioritizedRankbasedMemory:
-    def __init__(self, capacity):
+    def __init__(self, capacity, alpha, beta):
+        self.alpha = alpha
+        self.beta = beta
         self.capacity = capacity
         self.memory = deque()
         self.error_dict = {}
@@ -52,12 +54,17 @@ class PrioritizedRankbasedMemory:
     def sample(self, batch_size):
         things = [(self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)], (s, a, r, s_p, done)) for s, a, r, s_p, done in self.memory]
         things.sort(reverse=True, key=lambda tup: tup[0])
-        probs = np.array([1/(n+1) for n in range(len(things))])
-        probs /= sum(probs)
+        priorities = np.array([(1/(n+1))**self.alpha for n in range(len(things))])
+        probs = priorities / sum(priorities)
         # return np.random.choice([trans for error, trans in things], size = batch_size, p = probs)
         transitions = [trans for error, trans in things]
         idx = np.random.choice(len(transitions),size=batch_size, p=probs)
-        return np.array(transitions)[idx]
+        
+        min_prio = min(priorities)
+        max_weight = (len(self) * min_prio) ** -self.beta
+        weights = [(p * len(self)) ** -self.beta / max_weight for p in priorities[idx]]
+        
+        return np.array(transitions)[idx], weights
 
     def update_memory(self, transition, new_error):
         s, a, r, s_p, done = transition
@@ -67,7 +74,9 @@ class PrioritizedRankbasedMemory:
         return len(self.memory)
 
 class PrioritizedProportionalMemory:
-    def __init__(self, capacity):
+    def __init__(self, capacity, alpha, beta):
+        self.alpha = alpha
+        self.beta = beta
         self.capacity = capacity
         self.memory = deque()
         self.error_dict = {}
@@ -81,11 +90,16 @@ class PrioritizedProportionalMemory:
 
     def sample(self, batch_size):
         things = [(self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)], (s, a, r, s_p, done)) for s, a, r, s_p, done in self.memory]
-        probs = np.array([float(error) for error,mem in things])
-        probs /= sum(probs)
+        priorities = np.array([float(error)**self.alpha for error,mem in things])
+        probs = priorities / sum(priorities)
         transitions = [trans for error, trans in things]
         idx = np.random.choice(len(transitions),size=batch_size, p=probs)
-        return np.array(transitions)[idx]
+        
+        min_prio = min(priorities)
+        max_weight = (len(self) * min_prio) ** -self.beta
+        weights = [(p * len(self)) ** -self.beta / max_weight for p in priorities[idx]]
+
+        return np.array(transitions)[idx], weights
 
     def update_memory(self, transition, new_error):
         s, a, r, s_p, done = transition
@@ -95,7 +109,7 @@ class PrioritizedProportionalMemory:
         return len(self.memory)
 
 class PrioritizedGreedyMemory:
-    def __init__(self, capacity):
+    def __init__(self, capacity, alpha=None, beta=None):
         self.capacity = capacity
         self.memory = deque()
         self.error_dict = {}
@@ -112,11 +126,15 @@ class PrioritizedGreedyMemory:
         things.sort(reverse=True, key=lambda tup: tup[0])
         result = [trans for error, trans in things[:batch_size]]
         if len(result) < batch_size:
-            return (result * int((batch_size/len(result))+1))[:batch_size]
-        return result
+            return (result * int((batch_size/len(result))+1))[:batch_size], np.ones(batch_size)
+        return result, np.ones(batch_size)
 
     def update_memory(self, transition, new_error):
         s, a, r, s_p, done = transition
+        key = (hash_state(s), a, r, hash_state(s_p), done)
+        if key not in error_dict:
+            # logging professionally, as you can see. thank god this won't be maintained...
+            print('WARNING: The transition you tried to update has not ever been in memory before. This is most likely because the input format is different to the one originally used.')
         self.error_dict[(hash_state(s), a, r, hash_state(s_p), done)] = new_error
 
     def __len__(self):

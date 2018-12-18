@@ -111,15 +111,15 @@ def create_model(env):
     else:
         raise NotImplementedError()
 
-def create_mem(mem_name, mem_size):
+def create_mem(mem_name, mem_size, alpha, beta):
     if mem_name == "RandomReplay":
-        return ReplayMemory(mem_size)
+        return ReplayMemory(mem_size, alpha, beta)
     elif mem_name == "GreedyReplay":
-        return PrioritizedGreedyMemory(mem_size)
+        return PrioritizedGreedyMemory(mem_size, alpha, beta)
     elif mem_name == "RankBasedReplay":
-        return PrioritizedRankbasedMemory(mem_size)
+        return PrioritizedRankbasedMemory(mem_size, alpha, beta)
     elif mem_name == "ProportionalReplay":
-        return PrioritizedProportionalMemory(mem_size)
+        return PrioritizedProportionalMemory(mem_size, alpha, beta)
     else:
         raise NotImplementedError()
 
@@ -182,13 +182,15 @@ def save_results(durations, rewards, env_name, mem_name):
 
 
 if __name__ == "__main__":
-    num_episodes = 250
+    num_episodes = 20
     batch_size = 64
     discount_factor = 0.8
     mem_size = 500
     learn_rate = 1e-3
     num_hidden = 128
     seed = 42  # The answer to everything!
+    alpha = .6
+    beta = .6
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -240,7 +242,7 @@ if __name__ == "__main__":
         for mem_name in mems:
             print(f"Loading environment: {env_name} - ER method: {mem_name}")
             env = create_env(env_name)
-            memory = create_mem(mem_name, mem_size)
+            memory = create_mem(mem_name, mem_size, alpha, beta)
 
             print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
 
