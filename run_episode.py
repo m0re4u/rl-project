@@ -103,7 +103,7 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
         return None
 
     # random transition batch is taken from experience replay memory
-    transitions = memory.sample(batch_size)
+    transitions, weights = memory.sample(batch_size)
 
     # transition is a list of 4-tuples, instead we want 4 vectors (as torch.Tensor's)
     state, action, reward, next_state, done = zip(*transitions)
@@ -115,6 +115,9 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     reward = torch.tensor(reward, dtype=torch.float)
     done = torch.tensor(done, dtype=torch.uint8)  # Boolean
 
+    weights = torch.tensor(weights, dtype=torch.float)
+
+
     # compute the q value
     q_val = compute_q_val(model, state, action, env)
 
@@ -122,17 +125,21 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
         target = compute_target(model, reward, next_state, done, discount_factor, env)
 
     # loss is measured from error between current and newly expected Q values
-    loss = F.smooth_l1_loss(q_val, target)
+    unreduced_loss = F.smooth_l1_loss(q_val, target, reduction='none')
+
+    actual_loss = torch.mean(unreduced_loss)
+
+    weighted_loss_for_backprop = torch.mean(unreduced_loss * weights)
 
     for i in range(state.shape[0]):
-        memory.update_memory((state[i], action[i], reward[i], next_state[i], done[i]), loss.item())
+        memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), unreduced_loss[i].item())
 
     # backpropagation of loss to Neural Network (PyTorch magic)
     optimizer.zero_grad()
-    loss.backward()
+    weighted_loss_for_backprop.backward()
     optimizer.step()
 
-    return loss.item()  # Returns a Python scalar, and releases history (similar to .detach())
+    return actual_loss.item()  # Returns a Python scalar, and releases history (similar to .detach())
 
 
 def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate):

@@ -57,12 +57,12 @@ def create_windy_gridworld(shape, wind_strengths, goal):
     """
     winds = np.zeros(shape)
 
-    for j in range(len(wind_strengths[i])):
-        if isinstance(wind_strengths[i][j], tuple):
-            winds[:, list(wind_strengths[i][j])] = j
+    for j in range(len(wind_strengths)):
+        if isinstance(wind_strengths[j], tuple):
+            winds[:, list(wind_strengths[j])] = j
         else:
-            winds[:, wind_strengths[i][j]] = j
-    env = WindyGridworldEnv(shape, winds, goal_state)
+            winds[:, wind_strengths[j]] = j
+    env = WindyGridworldEnv(shape, winds, goal)
     return env
 
 def create_env(env_name):
@@ -113,15 +113,15 @@ def create_model(env):
     else:
         raise NotImplementedError()
 
-def create_mem(mem_name, mem_size):
+def create_mem(mem_name, mem_size, alpha, beta):
     if mem_name == "RandomReplay":
-        return ReplayMemory(mem_size)
+        return ReplayMemory(mem_size, alpha, beta)
     elif mem_name == "GreedyReplay":
-        return PrioritizedGreedyMemory(mem_size)
+        return PrioritizedGreedyMemory(mem_size, alpha, beta)
     elif mem_name == "RankBasedReplay":
-        return PrioritizedRankbasedMemory(mem_size)
+        return PrioritizedRankbasedMemory(mem_size, alpha, beta)
     elif mem_name == "ProportionalReplay":
-        return PrioritizedProportionalMemory(mem_size)
+        return PrioritizedProportionalMemory(mem_size, alpha, beta)
     else:
         raise NotImplementedError()
 
@@ -192,13 +192,15 @@ def save_results(durations, rewards, env_name, mem_name):
 
 
 if __name__ == "__main__":
-    num_episodes = 250
+    num_episodes = 20
     batch_size = 64
     discount_factor = 0.8
-    mem_size = 10000
+    mem_size = 500
     learn_rate = 1e-3
     num_hidden = 128
     seed = 42  # The answer to everything!
+    alpha = .6
+    beta = .6
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -217,7 +219,10 @@ if __name__ == "__main__":
         # "LargeGridWorld",
         # "HugeGridWorld",
         # "SimpleRectangleWorld",
-        "LargeRectangleWorld"
+        # "LargeRectangleWorld",
+        "SimpleWindyGridWorld",
+        "MediumRectangularWindyGridWorld",
+        "LargeRectangularWindyGridWorld",
     ]
     mazeworlds = [
         "SimpleMazeWorld",
@@ -229,16 +234,16 @@ if __name__ == "__main__":
         # "Acrobot-v1",
         # "MountainCar-v0",
         # "Pendulum-v0",
-        *gridworlds,
+         *gridworlds,
         # *mazeworlds
     ]
 
     # All types of experience replay
     mems = [
-        # "RandomReplay",
-        # "RankBasedReplay", # works on every env besides grid and maze worlds
+        "RandomReplay",
+        "RankBasedReplay", # works on every env besides grid and maze worlds
         "ProportionalReplay", # works on every env besides grid and maze worlds
-        # "GreedyReplay", # FIXME
+        "GreedyReplay", # FIXME
     ]
 
     for env_name in envs:
@@ -247,7 +252,7 @@ if __name__ == "__main__":
         for mem_name in mems:
             print(f"Loading environment: {env_name} - ER method: {mem_name}")
             env = create_env(env_name)
-            memory = create_mem(mem_name, mem_size)
+            memory = create_mem(mem_name, mem_size, alpha, beta)
 
             print(f"Doing: {env_name} - Observation space: {env.observation_space} - Action space: {env.action_space}")
 
