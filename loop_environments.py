@@ -19,6 +19,8 @@ IMAGE_FOLDER = "images"
 MAZE_FOLDER = "mazes"
 RESULTS_FOLDER = "results"
 
+plt.rcParams.update({'font.size': 16})
+
 def smooth(x, N):
     """
     Smooth the input data :x over :N neighbouring values
@@ -86,7 +88,7 @@ def create_env(env_name):
     elif env_name == "LargeMazeWorld":
         return load_maze("LargeMazeWorld", (25, 25))
     elif env_name == "SimpleWindyGridWorld":
-        return create_windy_gridworld((10,10), ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)), (9,8))
+        return create_windy_gridworld((7,10), ((0, 1, 2, 9), (3, 4, 5, 8) (6, 7)), (3,7))
     elif env_name == "MediumRectangularWindyGridWorld":
         return create_windy_gridworld((20,5), ((0, 1), (2, 3), (4)), (12, 3))
     elif env_name == "LargeRectangularWindyGridWorld":
@@ -137,13 +139,21 @@ def plot_episode_durations(durs, mem_names, env_name):
         if mem_names[i] == "RandomReplay":
             color = "blue"
         elif mem_names[i] == "RankBasedReplay":
-            color = "yellow"
+            color = "magenta"
         elif mem_names[i] == "ProportionalReplay":
             color = "green"
+        elif mem_names[i] == "HindsightReplay":
+            color="red"
+        elif mem_names[i] == "GreedyReplay":
+            color="orange"
         plt.plot(smooth(dur, 10), label=mem_names[i], color=color)
     plt.title('Episode durations per episode')
+    # plt.ylim(0, 200)
+    plt.xlabel("Episode")
+    plt.ylabel("Duration")
+    plt.tight_layout()
     plt.legend()
-    plt.savefig(f"{env_name}_durations.png")
+    plt.savefig(f"{env_name}_durations.png", dpi=360)
 
 
 def plot_episode_rewards(rewards, mem_names, env_name):
@@ -155,7 +165,7 @@ def plot_episode_rewards(rewards, mem_names, env_name):
         if mem_names[i] == "RandomReplay":
             color = "blue"
         elif mem_names[i] == "RankBasedReplay":
-            color = "yellow"
+            color = "magenta"
         elif mem_names[i] == "ProportionalReplay":
             color = "green"
         elif mem_names[i] == "GreedyReplay":
