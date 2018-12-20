@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict, defaultdict
 import gym
 import torch
 import random
@@ -18,6 +19,8 @@ import mazenv
 IMAGE_FOLDER = "images"
 MAZE_FOLDER = "mazes"
 RESULTS_FOLDER = "results"
+
+plt.rcParams.update({'font.size': 16})
 
 def smooth(x, N):
     """
@@ -86,7 +89,7 @@ def create_env(env_name):
     elif env_name == "LargeMazeWorld":
         return load_maze("LargeMazeWorld", (25, 25))
     elif env_name == "SimpleWindyGridWorld":
-        return create_windy_gridworld((10,10), ((0, 1, 6, 8, 9), (2, 7), (3), (4, 5)), (9,8))
+        return create_windy_gridworld((7,10), ((0, 1, 2, 9), (3, 4, 5, 8), (6, 7)), (3,7))
     elif env_name == "MediumRectangularWindyGridWorld":
         return create_windy_gridworld((20,5), ((0, 1), (2, 3), (4)), (12, 3))
     elif env_name == "LargeRectangularWindyGridWorld":
@@ -128,22 +131,46 @@ def plot_episode_durations(durs, mem_names, env_name):
     """
     Plot the episode durations (number of steps per episode).
     """
-        # # "RandomReplay",
-        # # "RankBasedReplay", # works on every env besides grid and maze worlds
-        # "ProportionalReplay"
 
     plt.clf()
-    for i, dur in enumerate(durs):
-        if mem_names[i] == "RandomReplay":
+    dur_dict = defaultdict(list)
+
+    for i, mem_name in enumerate(mem_names):
+        dur_dict[mem_name].append(smooth(durs[i], 10))
+
+    for mem_name, durs in dur_dict.items():
+        if mem_name == "RandomReplay":
             color = "blue"
-        elif mem_names[i] == "RankBasedReplay":
-            color = "yellow"
-        elif mem_names[i] == "ProportionalReplay":
+        elif mem_name == "RankBasedReplay":
+            color = "magenta"
+        elif mem_name == "ProportionalReplay":
             color = "green"
-        plt.plot(smooth(dur, 10), label=mem_names[i], color=color)
+        elif mem_name == "HindsightReplay":
+            color="red"
+        elif mem_name == "GreedyReplay":
+            color="orange"
+
+        durations = np.stack(durs, axis=0)
+        mean = np.mean(durations, axis=0)
+        std = np.std(durations, axis=0)
+        steps = np.arange(0, len(durs[0]))
+
+        # Plot mean
+        plt.plot(steps, mean, color=color, label=mem_name)
+        # Plot standard deviation
+        plt.fill_between(steps, mean-std, mean+std, color=color, alpha=0.1)
+
     plt.title('Episode durations per episode')
-    plt.legend()
-    plt.savefig(f"{env_name}_durations.png")
+    plt.ylim(0)
+    plt.xlabel("Episode")
+    plt.ylabel("Duration")
+    plt.tight_layout()
+
+    # Remove duplicates in legend
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = OrderedDict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+    plt.savefig(f"{env_name}_durations.png", dpi=360)
 
 
 def plot_episode_rewards(rewards, mem_names, env_name):
@@ -155,7 +182,7 @@ def plot_episode_rewards(rewards, mem_names, env_name):
         if mem_names[i] == "RandomReplay":
             color = "blue"
         elif mem_names[i] == "RankBasedReplay":
-            color = "yellow"
+            color = "magenta"
         elif mem_names[i] == "ProportionalReplay":
             color = "green"
         elif mem_names[i] == "GreedyReplay":
@@ -204,15 +231,15 @@ if __name__ == "__main__":
 
     # All environments
     gridworlds = [
-        # "SimpleGridWorld",
+        "SimpleGridWorld",
         # "MediumGridWorld",
         # "LargeGridWorld",
         # "HugeGridWorld",
         # "SimpleRectangleWorld",
         # "LargeRectangleWorld",
-        "SimpleWindyGridWorld",
-        "MediumRectangularWindyGridWorld",
-        "LargeRectangularWindyGridWorld",
+        # "SimpleWindyGridWorld",
+        # "MediumRectangularWindyGridWorld",
+        # "LargeRectangularWindyGridWorld",
     ]
     mazeworlds = [
         "SimpleMazeWorld",
@@ -220,11 +247,11 @@ if __name__ == "__main__":
         "LargeMazeWorld"
     ]
     envs = [
-        # "CartPole-v0",
+        "CartPole-v0",
         # "Acrobot-v1",
         # "MountainCar-v0",
         # "Pendulum-v0",
-         *gridworlds,
+         # *gridworlds,
         # *mazeworlds
     ]
 
