@@ -3,7 +3,7 @@ import pickle
 
 from loop_environments import plot_episode_rewards, plot_episode_durations
 
-RESULTS_FOLDER = "results"
+RESULTS_FOLDER = "results/new"
 FINAL_FOLDER = "final_images"
 
 def load_files(folder, environment, result_type):
@@ -61,10 +61,10 @@ if __name__ == "__main__":
         "HugeGridWorld",
         "SimpleRectangleWorld",
         "LargeRectangleWorld"
+        "SimpleWindyGridWorld"
+        "MediumRectangularWindyGridWorld"
+        "LargeRectangularWindyGridWorld"
     ]
 
-    result_types = ["durations", "rewards"]
-
     for env in envs:
-        for result_type in result_types:
-            plot(env, result_type)
+        plot(env, "durations")
