@@ -53,4 +53,18 @@ if __name__ == "__main__":
     if not os.path.exists(FINAL_FOLDER):
         os.mkdir(FINAL_FOLDER)
 
-    plot("HugeGridWorld", "rewards")
+    # All environments
+    envs = [
+        "SimpleGridWorld",
+        "MediumGridWorld",
+        "LargeGridWorld",
+        "HugeGridWorld",
+        "SimpleRectangleWorld",
+        "LargeRectangleWorld"
+    ]
+
+    result_types = ["durations", "rewards"]
+
+    for env in envs:
+        for result_type in result_types:
+            plot(env, result_type)
