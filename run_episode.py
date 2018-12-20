@@ -114,6 +114,7 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     state, action, reward, next_state, done = zip(*transitions)
 
     # convert to PyTorch and define types
+    # print(next_state)
     action = torch.tensor(np.array(list(action)))  # Need 64 bit to use them as index
     next_state = torch.tensor(next_state, dtype=torch.float)
     reward = torch.tensor(reward, dtype=torch.float)
@@ -137,7 +138,8 @@ def train(model, memory, optimizer, batch_size, discount_factor, env):
     weighted_loss_for_backprop = torch.mean(unreduced_loss * weights)
 
     for i in range(state.shape[0]):
-        memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), unreduced_loss[i].item())
+        # memory.update_memory((state[i].item(), action[i].item(), reward[i].item(), next_state[i].item(), done[i].item()), unreduced_loss[i].item())
+        memory.update_memory(transitions[i],unreduced_loss[i].item())
 
     # backpropagation of loss to Neural Network (PyTorch magic)
     optimizer.zero_grad()
@@ -180,87 +182,6 @@ def run_episodes(train, model, memory, env, num_episodes, batch_size, discount_f
 
 
 
-def experience_her_episode(env,goal,batch,global_steps):
-    s = np.reshape(np.array(env.reset()), -1)
-    state_goal = np.concatenate([s, goal], axis=-1)
-
-    done = False
-    episode_length = 0
-    episode_reward = 0
-    experience = []
-    while not done and episode_length<batch:
-        a = select_action(model, state_goal, env, get_epsilon(global_steps))
-        s_next, r, done, _ = env.step(a)
-        experience.append((s, a, r, s_next,done))
-        state_goal = np.concatenate([np.reshape(np.array(s_next),-1), goal], axis=-1)
-        s = s_next
-
-        episode_length += 1
-        episode_reward += r
-    return experience,episode_length, episode_reward
-
-def eval_her_episode(episode,extract_goal,calc_reward, her_type="future"):
-    '''
-    her_type = ["future","episode","last"]
-    '''
-    new_experience = []
-    for i,(s, a, r, sn,done) in enumerate(episode):
-        if her_type == "future":
-            samples = np.random.randint(i, len(episode), size=3)
-        elif her_type == "episode":
-            samples = np.random.randint(0, len(episode), size=3)
-        else:
-            samples = [-1]
-        for sample in samples:
-            goal = extract_goal(episode[sample][0])
-            reward = calc_reward(s, a, goal)
-            new_experience.append((np.concatenate([np.reshape(np.array(s),-1), goal], axis=-1),a,reward,np.concatenate([np.reshape(np.array(sn),-1), goal], axis=-1),done))
-
-    return new_experience
-
-def run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size,
-                        discount_factor,learn_rate,sample_goal,extract_goal,calc_reward,use_her=True):
-    optimizer = optim.Adam(model.parameters(), learn_rate)
-
-    global_steps = 0  # Count the steps (do not reset at episode start, to compute epsilon)
-    episode_lengths_epoch = []
-    episode_rewards_epoch = []
-    for epoch in range(epochs):
-        episode_lengths = []
-        episode_rewards = []
-        loss = None
-        for i in range(num_episodes):
-            if use_her:
-                goal = sample_goal()
-            else:
-                goal = []
-            episode, episode_length,episode_reward = experience_her_episode(env, goal,600,global_steps)
-
-            episode_lengths.append(episode_length)
-            episode_rewards.append(episode_reward)
-            for s, a, r, sn, done in episode:
-                goal_s = np.concatenate([ np.reshape(np.array(s),-1), goal], axis = -1)
-                goal_sn = np.concatenate([ np.reshape(np.array(sn),-1), goal], axis=-1)
-                memory.push((goal_s, a, r, goal_sn, done),loss)
-
-            if use_her:
-                her_experience = eval_her_episode(episode, extract_goal,calc_reward)
-                for transition in her_experience:
-                    memory.push(transition,loss)
-
-            for training_step in range(training_steps):
-                global_steps+=1
-                loss = train(model, memory, optimizer, batch_size, discount_factor,env)
-
-        if loss is not None:
-            print("Epoch: {:4d} | Loss: {}".format(epoch, loss))
-        episode_lengths_epoch.append(np.mean(episode_lengths))
-        episode_rewards_epoch.append(np.mean(episode_rewards))
-        # if loss is not None:
-        #     print("Episode: {:4d} | Loss: {}".format(i, loss))
-    return episode_lengths_epoch, episode_rewards_epoch
-
-
 if __name__ == "__main__":
     import loop_environments
     env = loop_environments.create_env("SimpleWindyGridWorld")
@@ -272,76 +193,20 @@ if __name__ == "__main__":
     memory = ReplayMemory(10000)
     num_hidden = 128
     seed = 42  # This is not randomly chosen
-
     # env = gym.envs.make("Acrobot-v1")
     # print(f"Action space: {env.action_space} - State space: {env.observation_space}")
-    # # We will seed the algorithm (before initializing QNetwork!) for reproducability
+    # We will seed the algorithm (before initializing QNetwork!) for reproducability
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     env.seed(seed)
 
-    # print(env.observation_space.shape)
-    # print(env.action_space.shape)
-    # model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
+    print(env.observation_space.shape)
+    print(env.action_space.shape)
+    model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
 
-    # episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
-    # plt.plot(episode_durations)
-    # plt.savefig("test.png")
-
-
-    # import loop_environments
-    # env = loop_environments.create_env("SimpleGridWorld")
-    # # env = gym.envs.make("LunarLander-v2")
-    # print(f"Action space: {env.action_space} - State space: {env.observation_space}")
-
-    # # We will seed the algorithm (before initializing QNetwork!) for reproducability
-    # random.seed(seed)
-    # torch.manual_seed(seed)
-    # env.seed(seed)
-
-
-
-
-#  lander
-    # sample_goal = lambda: (0, 0)
-    # extract_goal = lambda state: state[0:2]
-    # def calc_reward(state, action, goal):
-    #     distance = np.linalg.norm(np.array(state[0:2]) - np.array(goal))
-    #     return  - 100* distance
-
-# functions for grid world
-    def sample_goal():
-        # return np.random.choice([0, env.observation_space.n - 1], 1)
-        return [38]
-    extract_goal = lambda state: np.reshape(np.array(np.argmax(state)),-1)
-    def calc_reward(state, action, goal):
-        if state == goal:
-            return 0.0
-        else:
-            return -1.0
-# # maze
-#     def sample_goal():
-#         return env.maze.end_pos
-#     extract_goal = lambda state: np.reshape(np.array(np.argmax(state)),-1)
-#     def calc_reward(state, action, goal):
-#         if state == goal:
-#             return 0.0
-#         else:
-#             return -1.0
-    num_episodes = 1
-    epochs = 250
-    training_steps = 3
-    her = False
-    print(env.reset())
-    if her:
-        # model = QNetwork(env.observation_space.shape[0]+2, num_hidden, env.action_space.n)
-        model = QNetwork(2*env.observation_space.n, num_hidden, env.action_space.n)
-        episode_durations,episode_rewards  = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward)
-    else:
-        model = QNetwork(env.observation_space.n, num_hidden, env.action_space.n)
-        episode_durations,episode_rewards = run_her_episodes(train, model, memory, env, num_episodes, training_steps, epochs, batch_size, discount_factor, learn_rate, sample_goal, extract_goal, calc_reward,use_her=False)
-
-    loop_environments.save_results(episode_durations,episode_rewards,"MediumGridWorld","Random")
-    plt.plot(loop_environments.smooth(episode_durations, 5))
+    episode_durations, episode_rewards = run_episodes(train, model, memory, env, num_episodes, batch_size, discount_factor, learn_rate)
+    plt.plot(episode_durations)
     plt.savefig("test.png")
+
+
