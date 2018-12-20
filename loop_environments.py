@@ -156,9 +156,9 @@ def plot_episode_durations(durs, mem_names, env_name):
         steps = np.arange(0, len(durs[0]))
 
         # Plot mean
-        plt.plot(steps, mean, color=color, ls="--")
+        plt.plot(steps, mean, color=color, label=mem_name)
         # Plot standard deviation
-        plt.fill_between(steps, mean-std, mean+std, alpha=0.2)
+        plt.fill_between(steps, mean-std, mean+std, color=color, alpha=0.1)
 
     plt.title('Episode durations per episode')
     plt.ylim(0)
